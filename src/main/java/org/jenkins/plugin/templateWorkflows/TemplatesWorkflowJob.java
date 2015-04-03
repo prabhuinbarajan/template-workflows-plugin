@@ -1,17 +1,9 @@
 package org.jenkins.plugin.templateWorkflows;
 
+//import au.com.centrumsystems.hudson.plugin.buildpipeline.DownstreamProjectGridBuilder;
 import hudson.Extension;
 import hudson.XmlFile;
-import hudson.model.AbstractProject;
-import hudson.model.Hudson;
-import hudson.model.Item;
-import hudson.model.ItemGroup;
-import hudson.model.Items;
-import hudson.model.Job;
-import hudson.model.Queue;
-import hudson.model.TopLevelItem;
-import hudson.model.TopLevelItemDescriptor;
-import hudson.model.ViewJob;
+import hudson.model.*;
 import hudson.model.AbstractProject.AbstractProjectDescriptor;
 import hudson.model.Descriptor.FormException;
 import hudson.model.Queue.BuildableItem;
@@ -21,6 +13,7 @@ import hudson.util.IOUtils;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.StringWriter;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -32,8 +25,12 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import javax.servlet.ServletException;
+import javax.xml.transform.Transformer;
+import javax.xml.transform.TransformerFactory;
+import javax.xml.transform.stream.StreamResult;
 import javax.xml.transform.stream.StreamSource;
 
+import jenkins.model.AbstractTopLevelItem;
 import jenkins.model.Jenkins;
 import net.sf.json.JSONObject;
 
@@ -160,25 +157,64 @@ public class TemplatesWorkflowJob extends ViewJob<TemplatesWorkflowJob,Templates
     		is = new ByteArrayInputStream(jobXml.getBytes("UTF-8"));
 
     		Job replacedJob = null;
+            String[] jobStructure = jobReplacedName.split("/");
+            Item instanceItem = Jenkins.getInstance().getItem(jobStructure[0]);
 
     		if (isNew) {
-
-    			//check if job already exist
     			Job job = (Job)Jenkins.getInstance().getItem(jobReplacedName);
     			if (job != null) {
     				return false;
-    			}
-
+                }
     			replacedJob = (Job)Jenkins.getInstance().createProjectFromXML(jobReplacedName, is);
     			((Job)replacedJob).removeProperty(TemplateWorkflowProperty.class);
     			((Job)replacedJob).save();
+                try {
+                   /* Jenkins.getInstance().addView(new au.com.centrumsystems.hudson.plugin.buildpipeline.BuildPipelineView(replacedJob.getDisplayName(),
+                            replacedJob.getDisplayName(),
+                            new au.com.centrumsystems.hudson.plugin.buildpipeline.DownstreamProjectGridBuilder(jobReplacedName),
+                            "5",
+                            false,
+                            ""));
+                   */
+                }catch(Exception ex) {
+                    System.out.println(ex);
+                }
     			return true;
-
     		} else {
-    			replacedJob = (Job)Jenkins.getInstance().getItem(jobReplacedName);
+
+                replacedJob = (jobStructure.length > 1) ?  (Job)getJobItem(jobReplacedName, jobStructure, instanceItem, 1,false): (Job)instanceItem;
+                if(replacedJob == null) {
+                    return false;
+                }
+    			//replacedJob = (Job)Jenkins.getInstance().getItem(jobReplacedName);
+                StreamSource source = new StreamSource(is);
+               /* try{ StringWriter writer = new StringWriter();
+                    StreamResult result = new StreamResult(writer);
+                    TransformerFactory tFactory = TransformerFactory.newInstance();
+                    Transformer transformer = tFactory.newTransformer();
+                    transformer.transform(source,result);
+                    String strResult = writer.toString();
+                    System.out.println(strResult);
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }*/
+
     			replacedJob.updateByXml(new StreamSource(is));
     			replacedJob.removeProperty(TemplateWorkflowProperty.class);
     			replacedJob.save();
+                try {
+                  /* if(Jenkins.getInstance().getView(replacedJob.getDisplayName()) == null) {
+                        Jenkins.getInstance().addView(new au.com.centrumsystems.hudson.plugin.buildpipeline.BuildPipelineView(replacedJob.getDisplayName(),
+                                replacedJob.getDisplayName(),
+                                new au.com.centrumsystems.hudson.plugin.buildpipeline.DownstreamProjectGridBuilder(jobReplacedName),
+                                "5",
+                                false,
+                                ""));
+                    }
+                    */
+                }catch(Exception ex) {
+                    System.out.println(ex);
+                }
     			return null;
     		}
 
@@ -190,6 +226,43 @@ public class TemplatesWorkflowJob extends ViewJob<TemplatesWorkflowJob,Templates
 				return null;
 			}
     	}
+    }
+
+    private Item getJobItem(String jobReplacedName, String[] jobStructure, Item instanceItem, int currentNode, boolean returnParentOfItem) {
+        int returnNode  = (returnParentOfItem && jobStructure.length>1)? jobStructure.length - 2:jobStructure.length - 1;
+
+        if (instanceItem == null) {
+            System.out.println("Unable to find folder :" + jobStructure[currentNode] + ":" + jobReplacedName + ":" + currentNode);
+            return null;
+        }
+
+        if (currentNode == returnNode ) {  //already arrived at this node..so this has to be the job
+            if(jobStructure[currentNode].equals(instanceItem.getName())) {  // name of the requested node to match the job
+                String jobForComparison="job/"+jobReplacedName+"/";
+                System.out.println("instance url - " + instanceItem.getUrl() + ":" + jobForComparison);
+
+                if(jobForComparison.equals(instanceItem.getUrl())) {
+                    System.out.println("Matched Item -" + instanceItem.getUrl()  + ":" + jobReplacedName);
+                    return instanceItem;
+                }return null;
+            }else{
+                return null;
+            }
+        }
+         //not here... so let's make sure the item is still a container
+        if (! ( (instanceItem instanceof AbstractTopLevelItem))) { // && "com.cloudbees.hudson.plugins.folder.Folder".equals(instanceItem.getClass().getName()) )) {
+           System.out.println("Item is not a top level item :" + jobStructure[currentNode] + ":" + jobReplacedName + ":" + currentNode  + ":" + instanceItem);
+           //return null;
+        }
+        Collection<? extends Job> jobs = ((AbstractItem) instanceItem).getAllJobs();
+        for (Job job : jobs) {
+            Item jobItem = getJobItem(jobReplacedName, jobStructure, job,currentNode+1,returnParentOfItem);
+            if(jobItem !=null) {
+                return jobItem;
+            }
+        }
+        return null;
+
     }
 
     public TopLevelItemDescriptor getDescriptor() {
@@ -472,6 +545,7 @@ public class TemplatesWorkflowJob extends ViewJob<TemplatesWorkflowJob,Templates
 	                         "</tr>");
 	                build.append("<tr><td></td><td><div id =\"").append(j.getName()).append(".validation\" style=\"visibility: hidden;\"></div></td></tr>");
             	} else {
+                     System.out.println(templateInstance.getRelatedJobs() + ":" + j + ":"+ j.getName());
             		 String jobReplacedName = templateInstance.getRelatedJobs().get(j.getName());
             		 String href = Jenkins.getInstance().getRootUrl() + "job/" + jobReplacedName;
             		 build.append("<tr>").append(
@@ -526,11 +600,17 @@ public class TemplatesWorkflowJob extends ViewJob<TemplatesWorkflowJob,Templates
     	List<Job> relatedJobs = new ArrayList<Job>();
         List<Item> allItems = Jenkins.getInstance().getAllItems();
         for (Item i : allItems) {
+            if("com.cloudbees.hudson.plugins.folder.Folder".equals(i.getClass().getName())) {
+                System.out.println("Item is a folder ...skipping"+ i.getName());
+                continue;
+            }
             Collection<? extends Job> allJobs = i.getAllJobs();
             for (Job j : allJobs) {
                 TemplateWorkflowProperty t = (TemplateWorkflowProperty)j.getProperty(TemplateWorkflowProperty.class);
                 if (t != null) {
-                	for (String tName : t.getTemplateName().split(",")) {
+                    System.out.println("Desired Template:" + templateName + "Item Name " +  i.getName() + " jobName :" + ((j ==null) ? "empty":j.getName()) + " : templateName " + t.getTemplateName());
+
+                    for (String tName : t.getTemplateName().split(",")) {
                 		if (templateName.equalsIgnoreCase(tName.trim())) {
                 			relatedJobs.add(j);
                 		}

@@ -7,8 +7,11 @@
       <l:task icon="images/24x24/up.gif" href="${rootURL}/" title="Back to Dashboard" />
       <l:isAdmin>
         <l:task icon="images/24x24/edit-delete.gif" href="${rootURL}/${it.url}delete" title="Delete Project" />
-        <l:task icon="images/24x24/setting.gif"  onclick="setTemplateInstanceName('template.createNewTemplate'); return false;" href="${rootURL}/${it.url}configure" title="Create Workflow" />
       </l:isAdmin>
+       <j:if test="${h.hasPermission(app.CONFIGURE)}">
+        <l:task icon="images/24x24/setting.gif"  onclick="setTemplateInstanceName('template.createNewTemplate'); return false;" href="${rootURL}/${it.url}configure" title="Create Workflow" />
+       </j:if>
+
       <st:include page="actions.jelly" />
     </l:tasks>
 
