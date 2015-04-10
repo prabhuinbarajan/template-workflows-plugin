@@ -186,22 +186,10 @@ public class TemplatesWorkflowJob extends ViewJob<TemplatesWorkflowJob,Templates
                 if(replacedJob == null) {
                     return false;
                 }
-    			//replacedJob = (Job)Jenkins.getInstance().getItem(jobReplacedName);
                 StreamSource source = new StreamSource(is);
-               /* try{ StringWriter writer = new StringWriter();
-                    StreamResult result = new StreamResult(writer);
-                    TransformerFactory tFactory = TransformerFactory.newInstance();
-                    Transformer transformer = tFactory.newTransformer();
-                    transformer.transform(source,result);
-                    String strResult = writer.toString();
-                    System.out.println(strResult);
-                } catch (Exception e) {
-                    e.printStackTrace();
-                }*/
-
-    			replacedJob.updateByXml(new StreamSource(is));
-    			replacedJob.removeProperty(TemplateWorkflowProperty.class);
                 try {
+                    replacedJob.updateByXml(new StreamSource(is));
+                    replacedJob.removeProperty(TemplateWorkflowProperty.class);
                     replacedJob.save();
 
                   /* if(Jenkins.getInstance().getView(replacedJob.getDisplayName()) == null) {
