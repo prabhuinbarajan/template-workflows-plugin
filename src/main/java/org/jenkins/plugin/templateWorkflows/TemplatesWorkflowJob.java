@@ -201,8 +201,9 @@ public class TemplatesWorkflowJob extends ViewJob<TemplatesWorkflowJob,Templates
 
     			replacedJob.updateByXml(new StreamSource(is));
     			replacedJob.removeProperty(TemplateWorkflowProperty.class);
-    			replacedJob.save();
                 try {
+                    replacedJob.save();
+
                   /* if(Jenkins.getInstance().getView(replacedJob.getDisplayName()) == null) {
                         Jenkins.getInstance().addView(new au.com.centrumsystems.hudson.plugin.buildpipeline.BuildPipelineView(replacedJob.getDisplayName(),
                                 replacedJob.getDisplayName(),
@@ -214,6 +215,12 @@ public class TemplatesWorkflowJob extends ViewJob<TemplatesWorkflowJob,Templates
                     */
                 }catch(Exception ex) {
                     System.out.println(ex);
+                    try {
+                        replacedJob.delete();
+                        createOrUpdateJob(jobOrigName, jobReplacedName, jobXml, true);
+                    }catch(Exception ex1){
+                        System.out.println(ex1);
+                    }
                 }
     			return null;
     		}
